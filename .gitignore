@@ -1,0 +1,10 @@
+# data, result
+/data
+/nnUNet
+
+# sh
+*.sh
+
+# weight
+*.pt
+*.pth
