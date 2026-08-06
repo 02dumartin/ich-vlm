@@ -4,109 +4,82 @@
 # 2D 가중치: nnUNet_results/Dataset002_MBHSeg25_1cls/nnUNetTrainer__nnUNetPlans__2d
 #
 # test 데이터
-#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test_1cls/Test1_MBHSeg25_1cls    (3D+2D)
-#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test_1cls/Test2_CTICH_1cls       (3D+2D)
-#   SNU HE-01                                                                                       (2D만)
-# 2D, 3D 예측
+#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/test_data_1cls/Test1_MBHSeg25_1cls    (3D+2D)
+#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/test_data_1cls/Test2_CTICH_1cls       (3D+2D)
+#   SNU HE-01                                                                                     (2D만)
+#
+# 평가는 nnUNetv2_evaluate_folder가 생성하는 summary.json 기준(nnU-Net 표준 지표)
+#
+# 흐름:
+#   1) nnUNetv2_find_best_configuration 실행, inference_information.json(공식 결정 파일)에서
+#      best_config(단일 or ensemble) + postprocessing.pkl 확보
+#   2) 테스트셋별로 spec["configs"]에 정의된 차원(들) 예측 (postprocessing 미적용)
+#   3) best_config가 그 테스트셋이 지원하는 차원을 전부 포함할 때만 best_config 예측 + PP 적용본 추가
+#
+# 공통 함수(예측/평가/집계)는 src/segmentation/nnunet/test.py 참고. 여기엔 이 데이터셋 전용 설정과
+# 실행 순서만 남긴다. (1cls는 클래스가 ICH 하나뿐이라 mDice/mIoU macro-average를 추가하지 않는다 —
+# ICH_Dice/ICH_IoU 자체가 이미 "전체" 값이라 중복이기 때문)
 
-
-import os
 import sys
-import subprocess
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-import nibabel as nib
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# ---- nnUNet 환경변수 ----
+from src.segmentation.nnunet.test import (
+    NNUNetConfig,
+    best_config_predict_and_evaluate,
+    build_results_df,
+    postprocess_and_evaluate,
+    predict_and_evaluate,
+    run_find_best_config,
+    save_or_merge_csv,
+    summary_to_row,
+)
+
 NNUNET_ROOT = Path("/home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet")
-os.environ["nnUNet_raw"] = str(NNUNET_ROOT / "nnUNet_raw")
-os.environ["nnUNet_preprocessed"] = str(NNUNET_ROOT / "nnUNet_preprocessed")
-os.environ["nnUNet_results"] = str(NNUNET_ROOT / "nnUNet_results")
+CFG = NNUNetConfig(nnunet_root=NNUNET_ROOT, dataset_id=2, dataset_name="Dataset002_MBHSeg25_1cls")
+CFG.set_env()
 
-NNUNET_PREDICT_BIN = Path(sys.exec_prefix) / "bin" / "nnUNetv2_predict"
-
-DATASET_ID = 4  # Dataset004_MBHSeg25_1cls
-TRAINER = "nnUNetTrainer"
-PLANS = "nnUNetPlans"
-FOLDS = (0, 1, 2, 3, 4)
-
-FG_CLASS = 1  # ich
+CLASS_NAMES = {1: "ICH"}  # 1cls(전경) = ICH 유무
 
 # 테스트셋별로 어떤 차원(config)을 시도할지 정의
 # HE-01은 3D 볼륨을 만들 수 없어서 2D만 시도
 TEST_SETS = {
-    #"MBH-Seg25": {
-    #    "dir": NNUNET_ROOT / "nnUNet_test_1cls" / "Test1_MBHSeg25_1cls",
-    #    "configs": {"3d_fullres": "3D", "2d": "2D"},
-    #},
-    "CT-ICH": {
-        "dir": NNUNET_ROOT / "nnUNet_test_1cls" / "Test2_CTICH_1cls",
-        "configs": {"3d_fullres": "3D", "2d": "2D"},
+    "MBH-Seg25": {
+        "dir": NNUNET_ROOT / "test_data_1cls" / "Test1_MBHSeg25_1cls",
+        "configs": {"3d_fullres": "3D only", "2d": "2D only"},
     },
-    
+    "CT-ICH": {
+        "dir": NNUNET_ROOT / "test_data_1cls" / "Test2_CTICH_1cls",
+        "configs": {"3d_fullres": "3D only", "2d": "2D only"},
+    },
     #"SNU HE-01": {
-    #    "dir": NNUNET_ROOT / "nnUNet_test_1cls" / "Test3_HE01_1cls",  # TODO: 아직 미생성
-    #    "configs": {"2d": "2D"},
+    #    "dir": NNUNET_ROOT / "test_data_1cls" / "Test3_HE01_1cls",
+    #    "configs": {"2d": "2D only"},
     #},
 }
 
-PRED_ROOT = NNUNET_ROOT / "nnUNet_predictions" / "Dataset004_MBHSeg25_1cls"
+PRED_ROOT = NNUNET_ROOT / "nnUNet_predictions" / CFG.dataset_name
 
-# 6, 7번 GPU만 번갈아 사용
-GPU_POOL = ["6", "7"]
-
-
-def run_predict(input_dir: Path, output_dir: Path, config: str, gpu_id: str):
-    output_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        str(NNUNET_PREDICT_BIN),
-        "-i", str(input_dir),
-        "-o", str(output_dir),
-        "-d", str(DATASET_ID),
-        "-c", config,
-        "-tr", TRAINER,
-        "-p", PLANS,
-        "-f", *[str(f) for f in FOLDS],
-        "-device", "cuda",
-    ]
-    env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = gpu_id
-    print(f"RUN (GPU {gpu_id}):", " ".join(cmd))
-    subprocess.run(cmd, check=True, env=env)
-
-
-def dice_iou(pred: np.ndarray, gt: np.ndarray, cls: int):
-    p = pred == cls
-    g = gt == cls
-    inter = np.logical_and(p, g).sum()
-    union = np.logical_or(p, g).sum()
-    p_sum, g_sum = p.sum(), g.sum()
-    if p_sum + g_sum == 0:
-        return np.nan, np.nan
-    dice = 2 * inter / (p_sum + g_sum)
-    iou = inter / union if union > 0 else np.nan
-    return dice, iou
-
-
-def evaluate(pred_dir: Path, gt_dir: Path) -> pd.DataFrame:
-    rows = []
-    for gt_path in sorted(gt_dir.glob("*.nii*")):
-        pred_path = pred_dir / gt_path.name
-        if not pred_path.exists():
-            print(f"[경고] 예측 결과 없음: {pred_path}")
-            continue
-        gt = nib.load(str(gt_path)).get_fdata().astype(np.uint8)
-        pred = nib.load(str(pred_path)).get_fdata().astype(np.uint8)
-        dice, iou = dice_iou(pred, gt, FG_CLASS)
-        rows.append({"case": gt_path.name, "dice": dice, "iou": iou})
-    return pd.DataFrame(rows)
+# 6번 GPU만 사용
+GPU_POOL = ["6"]
 
 
 def main():
-    # {test_name: {"3D Dice":..,"3D IoU":..,"2D Dice":..,"2D IoU":..}}
-    table = {name: {} for name in TEST_SETS}
+    # 이 데이터셋에서 실제로 쓰이는 config 종류(모든 테스트셋의 configs 합집합) 각각에 대해
+    # 단독 postprocessing 여부를 따로 구한다. best_config가 3D(또는 앙상블)로 뽑히더라도
+    # 2D 자신의 PP 적용 결과를 놓치지 않기 위함.
+    all_configs = sorted({config for spec in TEST_SETS.values() for config in spec["configs"]})
+    best_by_config = {config: run_find_best_config(CFG, configs=(config,)) for config in all_configs}
+    for config, best in best_by_config.items():
+        if best is not None:
+            print(f"[{config} 단독 best] postprocessing={best['postprocessing_pkl']}")
+
+    best_config = run_find_best_config(CFG, configs=tuple(all_configs))
+    if best_config is not None:
+        print(f"[best_config] {best_config['configs']}")
+
+    results = []
     call_idx = 0
 
     for test_name, spec in TEST_SETS.items():
@@ -121,45 +94,54 @@ def main():
             print(f"[건너뜀] {test_name}: imagesTs 없음 ({images_dir})")
             continue
 
+        safe_name = test_name.replace(" ", "_")
         for config, dim_label in spec["configs"].items():
-            pred_dir = PRED_ROOT / config / test_name.replace(" ", "_")
+            pred_dir = PRED_ROOT / config / safe_name
             gpu_id = GPU_POOL[call_idx % len(GPU_POOL)]
             call_idx += 1
-            run_predict(images_dir, pred_dir, config, gpu_id)
+            summary_path = predict_and_evaluate(CFG, images_dir, pred_dir, labels_dir, config, gpu_id)
+            results.append(summary_to_row(summary_path, test_name, dim_label, CLASS_NAMES))
 
-            df_case = evaluate(pred_dir, labels_dir)
-            if df_case.empty:
-                print(f"[경고] {test_name}/{dim_label}: 평가할 케이스 없음")
-                continue
+            # 이 config 자신의 postprocessing 적용 버전
+            best_single = best_by_config.get(config)
+            if best_single is not None:
+                pp_dir = PRED_ROOT / f"{config}_pp" / safe_name
+                pp_summary_path = postprocess_and_evaluate(
+                    CFG, pred_dir, pp_dir, labels_dir,
+                    best_single["postprocessing_pkl"], best_single["plans_json"],
+                )
+                results.append(summary_to_row(pp_summary_path, test_name, f"{dim_label} (PP)", CLASS_NAMES))
 
-            table[test_name][f"{dim_label} Dice"] = df_case["dice"].mean()
-            table[test_name][f"{dim_label} IoU"] = df_case["iou"].mean()
+        # best_config는 이 테스트셋이 필요한 차원(config)을 전부 지원할 때만 실행
+        # (예: HE-01은 2D만 지원하므로 best_config가 3D/ensemble이면 건너뜀)
+        if best_config is not None and set(best_config["configs"]).issubset(spec["configs"].keys()):
+            pred_dir = PRED_ROOT / "best_config" / safe_name
+            gpu_id = GPU_POOL[call_idx % len(GPU_POOL)]
+            call_idx += 1
+            summary_path = best_config_predict_and_evaluate(
+                CFG, best_config["configs"], images_dir, pred_dir, labels_dir, gpu_id
+            )
+            results.append(summary_to_row(summary_path, test_name, "best_config", CLASS_NAMES))
 
-    columns = ["3D Dice", "3D IoU", "2D Dice", "2D IoU"]
-    rows = []
-    for test_name, spec in TEST_SETS.items():
-        row = {"Test Dataset": test_name}
-        available_dims = set(spec["configs"].values())
-        for col in columns:
-            dim = col.split(" ")[0]
-            if dim not in available_dims:
-                row[col] = "-"  # 애초에 이 차원으로 테스트 불가 (예: HE-01의 3D)
-            else:
-                row[col] = table[test_name].get(col, np.nan)
-        rows.append(row)
+            pp_dir = PRED_ROOT / "best_config_pp" / safe_name
+            pp_summary_path = postprocess_and_evaluate(
+                CFG, pred_dir, pp_dir, labels_dir,
+                best_config["postprocessing_pkl"], best_config["plans_json"],
+            )
+            results.append(summary_to_row(pp_summary_path, test_name, "best_config (PP)", CLASS_NAMES))
+        elif best_config is not None:
+            print(f"[건너뜀] {test_name}: best_config({best_config['configs']})에 필요한 차원 없음")
 
-    results_df = pd.DataFrame(rows)[["Test Dataset"] + columns]
+    if not results:
+        print("결과 없음")
+        return
+
+    results_df = build_results_df(results, CLASS_NAMES, macro_metrics=())
     print("\n===== nnUNetv2 1cls(2cls) 결과 =====")
-    print(results_df.round(4).to_string(index=False))
+    print(results_df.to_string(index=False))
 
-    out_csv = NNUNET_ROOT / "nnUNet_predictions" / "results_1cls.csv"
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    if out_csv.exists():
-        # 기존 결과 중, 이번에 실행하지 않은 데이터셋의 행만 남기고 이번 결과와 합침
-        existing_df = pd.read_csv(out_csv)
-        existing_df = existing_df[~existing_df["Test Dataset"].isin(results_df["Test Dataset"])]
-        results_df = pd.concat([existing_df, results_df], ignore_index=True)
-    results_df.to_csv(out_csv, index=False)
+    out_csv = NNUNET_ROOT / "nnUNet_predictions" / "results_1cls_all.csv"
+    save_or_merge_csv(results_df, out_csv)
     print(f"\n저장: {out_csv}")
 
 
