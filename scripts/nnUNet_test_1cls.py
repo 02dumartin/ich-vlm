@@ -1,12 +1,14 @@
 # nnUNet 1cls(2cls: background+ich) Test
 #
-# 3D 가중치: nnUNet_results/Dataset004_MBHSeg25_1cls/nnUNetTrainer__nnUNetPlans__3d_fullres
-# 2D 가중치: nnUNet_results/Dataset004_MBHSeg25_1cls/nnUNetTrainer__nnUNetPlans__2d
+# 3D 가중치: nnUNet_results/Dataset002_MBHSeg25_1cls/nnUNetTrainer__nnUNetPlans__3d_fullres
+# 2D 가중치: nnUNet_results/Dataset002_MBHSeg25_1cls/nnUNetTrainer__nnUNetPlans__2d
 #
 # test 데이터
-#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test_1cls/Test1_MBHSeg25_1cls  (3D+2D)
-#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test_1cls/Test2_CTICH_1cls      (3D+2D)
-#   SNU HE-01                                                                                      (2D만)
+#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test_1cls/Test1_MBHSeg25_1cls    (3D+2D)
+#   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test_1cls/Test2_CTICH_1cls       (3D+2D)
+#   SNU HE-01                                                                                       (2D만)
+# 2D, 3D 예측
+
 
 import os
 import sys

@@ -1,11 +1,15 @@
 # nnUNet 5cls Test
 #
-# 3D 가중치: nnUNet_results/Dataset003_MBHSeg25/nnUNetTrainer__nnUNetPlans__3d_fullres
-# 2D 가중치: nnUNet_results/Dataset003_MBHSeg25/nnUNetTrainer__nnUNetPlans__2d
+# 3D 가중치: nnUNet_results/Dataset001_MBHSeg25/nnUNetTrainer__nnUNetPlans__3d_fullres
+# 2D 가중치: nnUNet_results/Dataset001_MBHSeg25/nnUNetTrainer__nnUNetPlans__2d
 #
 # test 데이터
 #   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test/Test1_MBHSeg25
 #   /home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet/nnUNet_test/Test2_CTICH
+#
+# 2D, 3D 예측
+
+
 
 import os
 import sys
