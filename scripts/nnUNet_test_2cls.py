@@ -1,4 +1,4 @@
-# nnUNet 1cls(2cls: background+ich) Test
+# nnUNet 2cls(background+ich) Test
 #
 # 3D 가중치: nnUNet_results/Dataset002_MBHSeg25_1cls/nnUNetTrainer__nnUNetPlans__3d_fullres
 # 2D 가중치: nnUNet_results/Dataset002_MBHSeg25_1cls/nnUNetTrainer__nnUNetPlans__2d
@@ -17,7 +17,7 @@
 #   3) best_config가 그 테스트셋이 지원하는 차원을 전부 포함할 때만 best_config 예측 + PP 적용본 추가
 #
 # 공통 함수(예측/평가/집계)는 src/segmentation/nnunet/test.py 참고. 여기엔 이 데이터셋 전용 설정과
-# 실행 순서만 남긴다. (1cls는 클래스가 ICH 하나뿐이라 mDice/mIoU macro-average를 추가하지 않는다 —
+# 실행 순서만 남긴다. (2cls는 클래스가 ICH 하나뿐이라 mDice/mIoU macro-average를 추가하지 않는다 —
 # ICH_Dice/ICH_IoU 자체가 이미 "전체" 값이라 중복이기 때문)
 
 import sys
@@ -40,7 +40,7 @@ NNUNET_ROOT = Path("/home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/nnUNet")
 CFG = NNUNetConfig(nnunet_root=NNUNET_ROOT, dataset_id=2, dataset_name="Dataset002_MBHSeg25_1cls")
 CFG.set_env()
 
-CLASS_NAMES = {1: "ICH"}  # 1cls(전경) = ICH 유무
+CLASS_NAMES = {1: "ICH"}  # 2cls(전경) = ICH 유무
 
 # 테스트셋별로 어떤 차원(config)을 시도할지 정의
 # HE-01은 3D 볼륨을 만들 수 없어서 2D만 시도
@@ -66,18 +66,18 @@ GPU_POOL = ["6"]
 
 
 def main():
-    # 이 데이터셋에서 실제로 쓰이는 config 종류(모든 테스트셋의 configs 합집합) 각각에 대해
-    # 단독 postprocessing 여부를 따로 구한다. best_config가 3D(또는 앙상블)로 뽑히더라도
-    # 2D 자신의 PP 적용 결과를 놓치지 않기 위함.
+    # 전체(앙상블 포함) 최적 조합을 먼저 구하고, config별(2D 단독/3D 단독) postprocessing은 그 다음에
+    # 구한다. 순서가 중요하다 — 통합 비교(find_best_configuration -c ...)가 진 쪽 config의
+    # postprocessing.pkl을 지우는 부작용이 있어서, 개별 config를 나중에 구해야 마지막까지 살아있다.
     all_configs = sorted({config for spec in TEST_SETS.values() for config in spec["configs"]})
+    best_config = run_find_best_config(CFG, configs=tuple(all_configs))
+    if best_config is not None:
+        print(f"[best_config] {best_config['configs']}")
+
     best_by_config = {config: run_find_best_config(CFG, configs=(config,)) for config in all_configs}
     for config, best in best_by_config.items():
         if best is not None:
             print(f"[{config} 단독 best] postprocessing={best['postprocessing_pkl']}")
-
-    best_config = run_find_best_config(CFG, configs=tuple(all_configs))
-    if best_config is not None:
-        print(f"[best_config] {best_config['configs']}")
 
     results = []
     call_idx = 0
@@ -137,10 +137,10 @@ def main():
         return
 
     results_df = build_results_df(results, CLASS_NAMES, macro_metrics=())
-    print("\n===== nnUNetv2 1cls(2cls) 결과 =====")
+    print("\n===== nnUNetv2 2cls 결과 =====")
     print(results_df.to_string(index=False))
 
-    out_csv = NNUNET_ROOT / "nnUNet_predictions" / "results_1cls_all.csv"
+    out_csv = NNUNET_ROOT / "nnUNet_predictions" / "results_2cls_all.csv"
     save_or_merge_csv(results_df, out_csv)
     print(f"\n저장: {out_csv}")
 

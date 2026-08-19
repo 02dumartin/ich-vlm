@@ -1,6 +1,6 @@
 """nnUNetv2 예측 -> 평가 파이프라인 공통 함수.
 
-scripts/nnUNet_test_5cls.py, scripts/nnUNet_test_1cls.py 
+scripts/nnUNet_test_5cls.py, scripts/nnUNet_test_2cls.py 
 nnUNetv2 CLI 실행 + summary.json 집계 로직
 """
 
@@ -77,41 +77,56 @@ def run_evaluate_folder(cfg: NNUNetConfig, gt_dir: Path, pred_dir: Path) -> Path
     return out_json
 
 
-def run_find_best_config(cfg: NNUNetConfig, configs=("2d", "3d_fullres")) -> Optional[dict]:
+def run_find_best_config(cfg: NNUNetConfig, configs=("2d", "3d_fullres"),
+                          max_attempts: int = 3) -> Optional[dict]:
     """nnUNetv2_find_best_configuration 실행 후, 그 결과인 inference_information.json(공식 결정
     파일: postprocessing까지 반영된 최종 승자)을 그대로 읽어 config 조합과 postprocessing 정보를
     반환한다. 실패/결과 없으면 None.
 
     configs로 후보를 좁히면(예: ("2d",)) 그 config 단독의 postprocessing 적용 여부만 판단한다
     (후보가 1개면 앙상블은 불가능). inference_information.json은 호출할 때마다 덮어써지지만
-    postprocessing.pkl 자체는 config별 경로에 저장되므로, 반환값을 즉시 저장해두면 안전하다."""
+    postprocessing.pkl 자체는 config별 경로에 저장되므로, 반환값을 즉시 저장해두면 안전하다.
+
+    postprocessing 결정 단계가 가끔 postprocessing.pkl을 못 쓰고 조용히 넘어가는(에러 없이 exit 0)
+    flaky한 동작이 관찰돼서, 반환하기 전에 실제 파일 존재를 확인하고 없으면 재시도한다."""
     cmd = [
         str(FIND_BEST_BIN), str(cfg.dataset_id),
         "-c", *configs,
         "-tr", cfg.trainer, "-p", cfg.plans,
         "-f", *[str(f) for f in cfg.folds],
     ]
-    print("RUN:", " ".join(cmd))
-    try:
-        subprocess.run(cmd, check=True, env=os.environ.copy())
-    except subprocess.CalledProcessError as e:
-        print(f"[find_best_configuration 실패, 개별 결과만 사용] {e}")
-        return None
-
     info_path = cfg.nnunet_root / "nnUNet_results" / cfg.dataset_name / "inference_information.json"
-    if not info_path.exists():
-        print("[경고] inference_information.json 없음")
-        return None
 
-    with open(info_path) as f:
-        info = json.load(f)
+    for attempt in range(1, max_attempts + 1):
+        print(f"RUN (시도 {attempt}/{max_attempts}):", " ".join(cmd))
+        try:
+            subprocess.run(cmd, check=True, env=os.environ.copy())
+        except subprocess.CalledProcessError as e:
+            print(f"[find_best_configuration 실패, 개별 결과만 사용] {e}")
+            return None
 
-    best = info["best_model_or_ensemble"]
-    return {
-        "configs": [m["configuration"] for m in best["selected_model_or_models"]],
-        "postprocessing_pkl": Path(best["postprocessing_file"]),
-        "plans_json": Path(best["some_plans_file"]),
-    }
+        if not info_path.exists():
+            print("[경고] inference_information.json 없음")
+            return None
+
+        with open(info_path) as f:
+            info = json.load(f)
+
+        best = info["best_model_or_ensemble"]
+        result = {
+            "configs": [m["configuration"] for m in best["selected_model_or_models"]],
+            "postprocessing_pkl": Path(best["postprocessing_file"]),
+            "plans_json": Path(best["some_plans_file"]),
+        }
+
+        if result["postprocessing_pkl"].exists():
+            return result
+
+        print(f"[경고] postprocessing.pkl이 생성되지 않음: {result['postprocessing_pkl']} "
+              f"({attempt}/{max_attempts}번째 시도) -> 재시도")
+
+    print(f"[find_best_configuration] {max_attempts}번 시도해도 postprocessing.pkl이 안 만들어짐")
+    return None
 
 
 def run_apply_postprocessing(pred_dir: Path, output_dir: Path, pp_pkl: Path, plans_json: Path):
@@ -238,7 +253,7 @@ def summary_to_row(summary_path: Path, test_name: str, row_label: str, class_nam
 
 def add_macro_average(row: dict, class_names: dict, metrics=("Dice", "IoU")) -> dict:
     """클래스별 값의 macro-average를 row에 추가한다 (예: mDice, mIoU).
-    클래스가 여럿일 때만 의미가 있다 (1cls에서는 호출하지 않는다)."""
+    클래스가 여럿일 때만 의미가 있다 (2cls에서는 호출하지 않는다)."""
     for metric in metrics:
         values = [row[f"{name}_{metric}"] for name in class_names.values()]
         row[f"m{metric}"] = float(np.nanmean(values))

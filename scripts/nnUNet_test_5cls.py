@@ -57,18 +57,19 @@ GPU_POOL = ["6"]
 
 
 def main():
-    # config별(2D 단독/3D 단독) postprocessing 여부 + 전체(앙상블 포함) 최적 조합을 따로 구한다.
-    # best_config가 3D(또는 앙상블)로 뽑히더라도 2D 자신의 PP 적용 결과를 놓치지 않기 위함.
+    # 전체(앙상블 포함) 최적 조합을 먼저 구하고, config별(2D 단독/3D 단독) postprocessing은 그 다음에
+    # 구한다. 순서가 중요하다 — 통합 비교(find_best_configuration -c 3d_fullres 2d)가 진 쪽 config의
+    # postprocessing.pkl을 지우는 부작용이 있어서, 개별 config를 나중에 구해야 마지막까지 살아있다.
+    best_config = run_find_best_config(CFG, configs=tuple(CONFIGS.keys()))
+    if best_config is not None:
+        print(f"[best_config] {best_config['configs']}")
+
     best_by_config = {
         config: run_find_best_config(CFG, configs=(config,)) for config in CONFIGS
     }
     for config, best in best_by_config.items():
         if best is not None:
             print(f"[{config} 단독 best] postprocessing={best['postprocessing_pkl']}")
-
-    best_config = run_find_best_config(CFG, configs=tuple(CONFIGS.keys()))
-    if best_config is not None:
-        print(f"[best_config] {best_config['configs']}")
 
     results = []
     call_idx = 0

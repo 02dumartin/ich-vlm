@@ -1,6 +1,8 @@
 # data, result
 /data
 /nnUNet
+/experiments
+
 
 # sh
 *.sh
@@ -8,3 +10,7 @@
 # weight
 *.pt
 *.pth
+
+# .md
+claude.md
+*.log
