@@ -1,6 +1,6 @@
 # nnUNet 스캔 단위 평가 CSV
 #
-# nnUNet_test_5cls.py / nnUNet_test_2cls.py가 만들어 둔 summary.json들을 읽어서,
+# nnUNet_infer_5cls.py / nnUNet_infer_2cls.py가 만들어 둔 summary.json들을 읽어서,
 # (테스트셋 전체 평균이 아니라) 케이스 하나하나의 volume 전체 기준 Dice/IoU를 행으로 풀어낸다.
 # z축 슬라이스 수(n_slice)도 같이 붙여서, 노트북에서 "주목할 만한 스캔"을 골라내는 데 쓴다.
 #
