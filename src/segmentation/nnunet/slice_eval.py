@@ -1,11 +1,20 @@
-"""스캔(케이스) 단위 평가 CSV 생성.
+""" nnUNet 예측 결과 평가 CSV 생성.
 
-nnUNet_infer_5cls.py/nnUNet_infer_2cls.py가 만든 
-summary.json의 `metric_per_case`
-(케이스 하나하나의 volume 전체 기준 raw metric)를 그대로 행으로 풀어서 스캔별 CSV 생성
 
-volume 전체를 GT와 비교
-scripts/nnUNet_slice_eval.py
+1. scan level
+    - mDice, mIoU
+    - class별 Dice, IoU, TP, FP, FN, n_ref
+
+    nnUNet_infer_5cls.py/nnUNet_infer_2cls.py가 만든 
+    summary.json의 `metric_per_case`
+    (케이스 하나하나의 volume 전체 기준 raw metric)를 그대로 행으로 풀어서 캔스별 CSV 생성
+
+2. slice level
+    - Dice, IoU, Precision, Recall, TP, FP, FN, n_ref
+    - error_type(TN, TP_clean, FP_only, FN_only, mixed)
+    - gt_area_px, pred_area_px
+
+    volume 전체를 GT와 비교 후, 각 슬라이스에서 클래스별 TP/FP/FN/Dice/IoU 계산
 """
 
 import json

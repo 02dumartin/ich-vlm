@@ -1,7 +1,9 @@
-"""nnUNetv2 예측 -> 평가 파이프라인 공통 함수.
+"""
+nnUNetv2 예측 -> 평가 파이프라인 공통 함수.
 
 scripts/nnUNet_infer_5cls.py
 scripts/nnUNet_infer_2cls.py 
+
 nnUNetv2 CLI 실행 + summary.json 집계 로직
 """
 

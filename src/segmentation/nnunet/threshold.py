@@ -1,7 +1,7 @@
 """전경 확률 임계값 기반 재분류(re-argmax) 유틸.
 
-nnUNet 기본 판정은 6채널 softmax(배경 포함)에서 argmax를 그대로 쓴다. 민감도(recall)를
-올리기 위해, 전경 확률 합(1-배경확률)이 threshold보다 큰 voxel만 무조건 전경 클래스 중
+nnUNet 기본 판정은 6채널 softmax(배경 포함)에서 argmax를 그대로 쓴다. 
+민감도(recall)를 올리기 위해, 전경 확률 합(1-배경확률)이 threshold보다 큰 voxel만 무조건 전경 클래스 중
 argmax로 강제 배정하는 규칙을 적용한다. threshold가 낮을수록 더 관대하게 전경으로 강제
 배정되어(배경확률 < 1-threshold) recall은 오르고 FP도 늘어난다.
 threshold=0.5는 배경확률<0.5와 동일하며, 6채널 전체 argmax와 근사하지만 완전히 같지는
@@ -24,9 +24,12 @@ from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
 
 
 def apply_threshold_to_probabilities(probabilities: np.ndarray, threshold: float) -> np.ndarray:
-    """probabilities: (C, z, y, x), 채널 0=background. 
-    전경 확률 합(1-배경확률)이 threshold보다 큰(=배경확률이 1-threshold보다 작은) voxel만 전경 클래스(1..C-1) 중 argmax로 강제 배정,
-    나머지는 배경(0). threshold가 낮을수록 더 관대해져 전경이 늘어난다."""
+    """
+    probabilities: (C, z, y, x), 채널 0=background. 
+    전경 확률 합(1-배경확률)이 threshold보다 큰(=배경확률이 1-threshold보다 작은) voxel만 
+    전경 클래스(1..C-1) 중 argmax로 강제 배정, 나머지는 배경(0). 
+    threshold가 낮을수록 더 관대해져 전경이 늘어난다.
+    """
     bg_prob = probabilities[0]
     fg = probabilities[1:].argmax(0) + 1
     seg = np.where(bg_prob < (1 - threshold), fg, 0)

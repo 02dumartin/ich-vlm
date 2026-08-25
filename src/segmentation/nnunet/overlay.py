@@ -1,8 +1,8 @@
-"""scan/slice 단위 GT vs threshold별 예측 오버레이 이미지 생성.
+"""
+scan/slice 단위 GT vs threshold별 예측 오버레이 이미지 생성.
 
-notebook/nnUNet_result.ipynb의 show_case/show_case_thr와 동일한 방식(LPS 재정렬,
-window/level, 5cls 컬러맵, 반투명 마스크 오버레이)을 재사용해서, 한 슬라이스에 대해
-GT + 여러 threshold 예측을 한 장의 그리드 이미지로 저장한다.
+LPS 재정렬,window/level, 5cls 컬러맵, 반투명 마스크 오버레이 반영
+한 슬라이스에 대해 GT + 여러 threshold 예측을 한 장의 그리드 이미지로 저장.
 """
 
 from pathlib import Path
@@ -13,6 +13,9 @@ import numpy as np
 import SimpleITK as sitk
 from matplotlib.colors import ListedColormap
 
+
+
+# class name and color mapping
 class_names = {
     1: "EDH",
     2: "IPH",
@@ -29,7 +32,7 @@ class_colors = {
     5: (4, 136, 133),    # SDH
 }
 
-
+# build color map
 def build_cmap(color_dict: dict, n_classes: int) -> ListedColormap:
     colors_rgb = np.zeros((n_classes, 3))
     for cls, rgb in color_dict.items():
@@ -40,12 +43,14 @@ def build_cmap(color_dict: dict, n_classes: int) -> ListedColormap:
 cmap_5cls = build_cmap(class_colors, 6)  # 0(background, black)~5
 
 
+# apply window
 def apply_window(slice_hu: np.ndarray, window_level: float = 40, window_width: float = 80) -> np.ndarray:
     """뇌실질 window(level 40 / width 80)로 HU 값을 0~1로 정규화."""
     lo, hi = window_level - window_width / 2, window_level + window_width / 2
     return (np.clip(slice_hu, lo, hi) - lo) / (hi - lo)
 
 
+# load lps array
 def load_lps_array(path: Path) -> np.ndarray:
     """DICOM 표준 axial view(anterior=위, 방사선과 관례 좌우)로 보이도록 LPS 재정렬 후 (z, y, x) 배열 반환."""
     img_sitk = sitk.ReadImage(str(path))
@@ -53,6 +58,7 @@ def load_lps_array(path: Path) -> np.ndarray:
     return sitk.GetArrayFromImage(img_lps)
 
 
+# draw mask panel
 def _draw_mask_panel(ax, windowed_slice: np.ndarray, mask_slice: np.ndarray, title: str):
     mask_overlay = np.ma.masked_where(mask_slice == 0, mask_slice)
     ax.imshow(windowed_slice, cmap="gray", vmin=0, vmax=1)
@@ -61,11 +67,12 @@ def _draw_mask_panel(ax, windowed_slice: np.ndarray, mask_slice: np.ndarray, tit
     ax.axis("off")
 
 
+# load case volumes
 def load_case_volumes(img_path: Path, gt_path: Path, thr_pred_paths: dict) -> dict:
     """
     한 케이스(스캔)의 CT/GT/threshold별 예측 볼륨을 한 번에 로드.
     같은 케이스의 여러 슬라이스를 그릴 때 plot_slice_threshold_grid에 volumes로 넘겨
-    케이스당 한 번만 로드하도록(반복 I/O 방지) 쓰는 용도.
+    케이스당 한 번만 로드(반복 I/O 방지).
     """
     return {
         "img": load_lps_array(img_path),
@@ -92,7 +99,7 @@ def plot_slice_threshold_grid(
     (thr_pred_paths는 순서를 보존한 dict로 넘겨야 함: 0.5, 0.1, 0.05, 0.01 순)
 
     volumes: load_case_volumes()로 미리 로드해 둔 볼륨(같은 케이스 반복 호출 시 재사용).
-    없으면 이 함수 안에서 직접 로드한다.
+    없으면 이 함수 안에서 직접 로드
     """
     if volumes is None:
         volumes = load_case_volumes(img_path, gt_path, thr_pred_paths)
