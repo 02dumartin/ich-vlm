@@ -1,0 +1,24 @@
+# scripts/vlm_pipeline.py --config configs/vlm_pipeline/thr0.001.yaml
+#
+# dataset_json: dataset_prepare.py가 만든 원본 (읽기 전용, 절대 덮어쓰지 않음)
+# results_json: 이 파이프라인 실행이 채워나가는 단일 결과 파일 (실험 output 쪽)
+
+dataset_json: vlm_datasets/mbh-seg25-5cls/thr0.001/5cls_dataset.json
+results_json: experiments/260825_vlm-is-lesion-mbhseg25-5cls/output/thr0.001_results.json
+tag: thr0.001
+
+stages: [is_lesion, subtype, evaluate]
+
+is_lesion:
+  base_url: http://localhost:8891/v1
+  model: Qwen/Qwen3.5-27B
+  gen_config: non_thinking
+  crop_mode: crop_min
+  max_workers: 8
+
+subtype: {}  # 비어있으면 is_lesion 설정을 그대로 상속
+
+evaluate:
+  pred_5cls_dir: nnUNet/nnUNet_predictions/Dataset001_MBHSeg25/2d_pp/MBH-Seg25
+  gt_5cls_dir: nnUNet/test_data/Test1_MBHSeg25/labelsTs
+  skip_seg_eval: false

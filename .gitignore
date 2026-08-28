@@ -13,6 +13,6 @@
 *.pth
 
 # .md
-claude.md
+CLAUDE.md
 *.log
 
