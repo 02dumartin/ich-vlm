@@ -19,6 +19,7 @@ FP 카테고리는 아래 4편을 종합:
         C: parenchymal calcification, D: malignancy with perifocal edema)
 """
 
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image
@@ -42,10 +43,12 @@ EXAMPLE_CASES = [
              "병변다운 형태가 아님."},
     {"category": "beam_hardening", "idx": 1,
      "note": "두개골에서 발생한 beam-hardening artifact(다른 증례)."},
-    {"category": "tumor", "idx": 0,
-     "note": "제3뇌실의 colloid cyst. 작지만 팽창성 종괴 형태이고 급성 혈종의 모양이 아님."},
-    {"category": "tumor", "idx": 2,
-     "note": "두개외/두개내로 걸친 전이성 종양. 팽창성 종괴이며 급성 출혈의 밀도/모양이 아님."},
+    {"category": "tumor", "idx": 1,
+     "note": "S4 Fig 원 캡션에 개별 진단명이 없는 증례(총괄 캡션 기준 hyperdense/부분 석회화 종양). "
+             "정중선 부근 작고 둥근 고음영 병소이고 급성 혈종의 모양이 아님."},
+    {"category": "tumor", "idx": 3,
+     "note": "좌측 auditory canal의 vestibular schwannoma(extra-/intra-canalicular growth). "
+             "소뇌교각(CPA)/내이도 부근의 종괴이며 급성 출혈의 밀도/모양이 아님."},
 ]
 
 
@@ -56,8 +59,7 @@ class ICHIsLesionResult(BaseModel):
 def zeroshot_prompt() -> str:
     return """
     You are Reader #2, providing an independent second read of a candidate brain hemorrhage finding
-    from a non-contrast head CT, originally flagged by a segmentation model (Reader #1). You do not
-    see Reader #1's classification - judge independently from the images alone.
+    from a non-contrast head CT, originally flagged by a segmentation model (Reader #1).
 
     You are given two images of the flagged region.
     Image 1: the full axial slice, with the flagged region highlighted, showing its location relative
@@ -71,43 +73,21 @@ def zeroshot_prompt() -> str:
     Reader #1's false positives cluster into these categories (from published AI-ICH-detection error
     analyses, roughly ordered by how often they occur):
 
-    1. Calcification (single most common FP cause) - two distinct kinds:
-       - Physiological calcification: choroid plexus (lateral ventricle atrium), pineal gland,
-         falx cerebri, habenula. Always at a fixed, predictable normal anatomic site,
-         usually midline or paired/symmetric, round and well-circumscribed, small.
-         
-       - Pathologic parenchymal calcification: basal ganglia/thalamus (e.g. mineralizing
-         microangiopathy), old granuloma, tumor-associated calcification. Located within brain
-         parenchyma rather than a fixed normal site, so it can mimic IPH - but density is much
-         higher than acute blood (acute hematoma is typically ~40-90 HU; calcification often
-         exceeds ~100 HU and looks chalk-white), margins are sharp and homogeneous, and there is
-         no surrounding edema or mass effect.
+    1. Calcification - physiological (choroid plexus, pineal gland, falx cerebri, habenula: fixed
+       midline/paired sites, round, small) or pathologic (basal ganglia, old granuloma: much denser
+       and more chalk-white than acute blood, sharp margins, no edema).
 
-    2. Beam-hardening / streak artifact - straight or fan-shaped streaks radiating from a dense
-       structure (skull base, occipital bone) or metal (dental hardware, surgical clips, foreign
-       body), not confined to an anatomically plausible lesion shape.
+    2. Beam-hardening / streak artifact - straight or fan-shaped streaks radiating from bone or
+       metal, not an anatomically plausible lesion shape.
 
-    3. Motion artifact - blurring or double-edge/ghosting affecting a broad region or the whole
-       slice, not a discrete focal finding.
+    3. Motion artifact - blurring or double-edge/ghosting over a broad region, not a discrete
+       focal finding.
 
-    4. Partial volume averaging - apparent hyperdensity at a bone-brain interface (temporal bone,
-       occipital horn of the lateral ventricle) caused by slice thickness mixing bone and brain
-       signal; check if it is still present and shaped the same way on neighboring slices.
+    4. Partial volume averaging - hyperdensity at a bone-brain interface (temporal bone, occipital
+       horn of the lateral ventricle); check if it persists on neighboring slices.
 
-    5. Tumor / mass, with or without perifocal edema - expansile mass-like shape, may have
-       vasogenic edema following white matter, different growth pattern from an acute hematoma.
-
-    6. Postoperative / postischemic defect - craniotomy/burr-hole change, encephalomalacia, or old
-       infarct (with or without secondary calcification/hemorrhagic transformation); look for an
-       associated skull defect, chronic volume-loss pattern, or vascular-territory shape.
-
-    7. Normal blood vessel - a vessel lumen or wall (sometimes calcified) with a linear/tubular
-       shape that follows a vascular course rather than sitting as a discrete round/crescent focus.
-
-    8. Pseudo-subarachnoid hemorrhage - in diffuse cerebral edema / hypoxic-ischemic injury, the
-       basal cisterns and vessels can appear relatively hyperdense against the diffusely hypodense,
-       swollen brain, mimicking SAH. Look for accompanying diffuse sulcal effacement and loss of
-       gray-white differentiation rather than a truly hyperdense fluid collection.
+    5. Tumor / mass - expansile mass-like shape, possibly with vasogenic edema, unlike an acute
+       hematoma.
 
     Judge whether this is a true hemorrhage lesion (is_lesion). If it instead matches one of the FP
     categories above, or any other non-hemorrhage explanation, set is_lesion to false.
@@ -127,9 +107,15 @@ def example_prompt() -> str:
     """
 
 
+@lru_cache(maxsize=1)
 def build_example_blocks() -> list[dict]:
     """EXAMPLE_CASES의 처리된 이미지(fp_examples.py 출력)를 few-shot 데모 content block으로 변환.
-    각 사례를 "Image N (full)/(crop) + 근거 설명 + 정답"으로 제시해, 실제 질의보다 먼저 붙인다."""
+    각 사례를 "Image N (full)/(crop) + 근거 설명 + 정답"으로 제시해, 실제 질의보다 먼저 붙인다.
+    EXAMPLE_CASES/이미지는 실행 중 안 바뀌는 고정값이라 lru_cache로 첫 호출에서만 디스크에서
+    읽고 인코딩한다 - 인스턴스마다 build_messages_example -> 이 함수가 다시 불리는데, 캐싱 없이는
+    데이터셋 크기만큼 같은 6쌍(12장) 이미지를 반복 재로딩/재인코딩하게 된다. 캐시로 돌려주는
+    리스트는 호출부(build_messages_example)에서 +로 새 리스트를 만들어 붙이기만 하고 in-place로
+    수정하지 않으므로 재사용해도 안전하다."""
     blocks = [{"type": "text", "text":
         "Study these confirmed non-hemorrhage examples before judging the actual case below "
         "(published false positives from an AI hemorrhage detector, Kundisch et al. PLOS ONE 2021). "
@@ -165,10 +151,9 @@ def build_messages(full_img, crop_img, prompt_fn=zeroshot_prompt) -> list[dict]:
 
 def build_messages_example(full_img, crop_img) -> list[dict]:
     """build_messages와 동일한 실제 질의 뒤에 example_prompt를 붙이되, 
-    그 앞에 few-shot
-    데모(build_example_blocks)를 먼저 넣는다. pipeline.classify_one이 build_messages_fn(full_img,
-    crop_img) 형태(인자 2개)로 호출하므로, vlm_is_lesion.py --prompt-variant example에서 이
-    함수를 build_messages_fn으로 그대로 넘겨쓴다."""
+    그 앞에 few-shot 데모(build_example_blocks)를 먼저 넣는다. 
+    pipeline.classify_one이 build_messages_fn(full_img, crop_img) 형태(인자 2개)로 호출하므로, 
+    vlm_is_lesion.py --prompt-variant example에서 이 함수를 build_messages_fn으로 그대로 넘겨쓴다."""
     messages = build_messages(full_img, crop_img, prompt_fn=example_prompt)
-    messages[0]["content"] = build_example_blocks() + messages[0]["content"]
+    messages[0]["content"] = build_example_blocks() + messages[0]["content"] # 이어 붙이기
     return messages

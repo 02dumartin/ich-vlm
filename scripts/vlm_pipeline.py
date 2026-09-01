@@ -16,11 +16,11 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.vlm.classify.client import GEN_CONFIGS, get_client
-from src.vlm.classify.evaluate import run_detection_eval, show_vlm_errors
+from src.vlm.analysis.evaluate import run_detection_eval, show_vlm_errors
 from src.vlm.classify.is_lesion_prompts import ICHIsLesionResult
 from src.vlm.classify.is_lesion_prompts import build_messages as build_is_lesion_messages
 from src.vlm.classify.pipeline import classify_dataset_records
-from src.vlm.classify.segmentation_eval import run_segmentation_eval
+from src.vlm.analysis.segmentation_eval import run_segmentation_eval
 from src.vlm.classify.subtype_prompts import ICHSubtypeResult
 from src.vlm.classify.subtype_prompts import build_messages as build_subtype_messages
 

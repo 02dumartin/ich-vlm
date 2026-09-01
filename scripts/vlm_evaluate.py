@@ -20,8 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.vlm.classify.evaluate import run_detection_eval, show_vlm_errors
-from src.vlm.classify.segmentation_eval import run_segmentation_eval
+from src.vlm.analysis.evaluate import run_detection_eval, show_vlm_errors
+from src.vlm.analysis.segmentation_eval import run_segmentation_eval
 
 
 def parse_arguments():

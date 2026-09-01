@@ -151,6 +151,84 @@ def build_slice_samples(case_id: str, slice_idx: int, image_2d: np.ndarray,
     return samples, len(fn_only)
 
 
+def build_gt_slice_samples(case_id: str, slice_idx: int, image_2d: np.ndarray, gt_2d: np.ndarray,
+                            out_dir: Path, class_names: dict = CLASS_NAMES) -> list[dict]:
+    """
+    pred 없이 GT 인스턴스만으로 샘플을 만든다 - nnUNet 예측이 아니라 nnUNet_raw의 GT 라벨
+    자체에서 VLM 학습/평가용 데이터셋을 만들 때 씀(예: Dataset001_MBHSeg25의 imagesTr/labelsTr,
+    imagesTs/labelsTs로 train/test 데이터셋을 만드는 경우). build_slice_samples와 달리
+    match_pred_to_gt(예측 vs GT 매칭) 단계 자체가 없다 - 인스턴스가 이미 GT라 매칭할 예측이 없음.
+    그래서 seg_lesion_type/seg_lesion_type_correct 같은 예측 파생 필드도 없고, crop은
+    crop_min_contour 하나만 만든다(4종 다 안 만듦).
+    """
+    windowed = apply_window(image_2d)
+    gt_mask, gt_regions = semantic_to_instance(gt_2d)
+
+    samples = []
+    for region in gt_regions:
+        sample_id = f"{case_id}_s{slice_idx:03d}_inst{region['instance_id']}"
+        instance_mask = gt_mask == region["instance_id"]
+
+        overlay_img = draw_single_bbox_overlay(windowed, region["bbox"])
+        overlay_path = out_dir / "images" / "overlay" / f"{sample_id}.png"
+        overlay_img.save(overlay_path)
+
+        crop_img = crop_image(windowed, region["bbox"], mode="crop_min_contour", instance_mask=instance_mask)
+        crop_path = out_dir / "images" / "crop_min_contour" / f"{sample_id}.png"
+        crop_img.save(crop_path)
+
+        gt_lesion_type_id = region["class_id"]
+        samples.append({
+            "id": sample_id,
+            "case_id": case_id,
+            "slice_idx": slice_idx,
+            "bbox": list(region["bbox"]),
+            "area_px": region["area_px"],
+            "gt_is_lesion": True,
+            "gt_lesion_type_id": gt_lesion_type_id,
+            "gt_lesion_type": class_names[gt_lesion_type_id],
+            "images": {"overlay": str(overlay_path), "crop_min_contour": str(crop_path)},
+        })
+
+    return samples
+
+
+def build_gt_dataset(gt_dir: Path, images_dir: Path, out_dir: Path,
+                      class_names: dict = CLASS_NAMES) -> list[dict]:
+    """
+    gt_dir의 케이스마다 images_dir에서 짝을 찾아 build_gt_slice_samples를 슬라이스별로 실행.
+    build_dataset과 달리 pred_dir이 없고(GT 자체가 인스턴스 소스), FN 개념이 없어
+    fn_log을 반환하지 않는다.
+    """
+    out_dir = Path(out_dir)
+    for mode in ("overlay", "crop_min_contour"):
+        (out_dir / "images" / mode).mkdir(parents=True, exist_ok=True)
+
+    all_samples = []
+    gt_cases = sorted(p.stem.replace(".nii", "") for p in Path(gt_dir).glob("*.nii.gz"))
+    print(f"전체 케이스 수: {len(gt_cases)}")
+
+    for case_id in gt_cases:
+        gt_path = Path(gt_dir) / f"{case_id}.nii.gz"
+        img_path = Path(images_dir) / f"{case_id}_0000.nii.gz"
+
+        if not img_path.exists():
+            print(f"[건너뜀] {case_id}: 원본 이미지 없음")
+            continue
+
+        gt_vol = load_lps_array(gt_path).astype(np.uint8)
+        img_vol = load_lps_array(img_path)
+
+        for z in range(gt_vol.shape[0]):
+            gt_2d, img_2d = gt_vol[z], img_vol[z]
+            if gt_2d.sum() == 0:
+                continue
+            all_samples.extend(build_gt_slice_samples(case_id, z, img_2d, gt_2d, out_dir, class_names))
+
+    print(f"총 샘플 수: {len(all_samples)}")
+    return all_samples
+
+
 def build_dataset(pred_dir: Path, gt_dir: Path, images_dir: Path, out_dir: Path,
                    class_names: dict = CLASS_NAMES) -> tuple[list[dict], list[dict]]:
     """

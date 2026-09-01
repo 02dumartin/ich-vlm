@@ -70,11 +70,12 @@ def classify_dataset_records(records: list[dict], build_messages_fn: Callable, s
                               client: OpenAI, model_name: str, gen_config: dict, fallback: dict,
                               crop_mode: str = "crop_min", max_workers: int = 8) -> list[dict]:
     """
-    슬라이스 그룹 단위 순차 + 그룹 내 병렬로 VLM 분류를 실행.
-    각 레코드는 원래 필드(GT 포함)를 그대로 유지한 채 instance_number + 분류 결과
-    (schema_cls 필드)만 덧붙여 반환한다 — 단일 JSON에 컬럼을 누적하는 구조이므로
-    입력 필드를 걸러내지 않는다. VLM에는 images[overlay]/images[crop_mode] 두 장만
-    build_messages_fn을 통해 전달되고, 그 외 필드(GT 포함)는 모델 입력에 섞이지 않는다.
+    슬라이스 그룹 단위 순차 + 그룹 내 병렬로 VLM 분류를 실행
+    각 레코드는 원래 필드(GT 포함)를 그대로 유지한 채 
+    instance_number + 분류 결과(schema_cls 필드)만 덧붙여 반환한다
+    — 단일 JSON에 컬럼을 누적하는 구조이므로 입력 필드를 걸러내지 않음
+    VLM에는 images[overlay]/images[crop_mode] 두 장만 build_messages_fn을 통해 전달되고, 
+    그 외 필드(GT 포함)는 모델 입력에 섞이지 않음.
     """
     merged = []
     for (case_id, slice_idx), slice_records in group_by_slice(records):
