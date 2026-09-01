@@ -1,4 +1,4 @@
-"""
+ """
 1) 저장
     VLM 판정(vlm1_is_lesion, vlm2_lesion_type)을 nnUNet 5cls 예측 볼륨에 반영해 nii.gz로 저장
 2) 평가
@@ -40,7 +40,9 @@ def _reorient_like(array: np.ndarray, reference_img: "sitk.Image", original_orie
 
 
 def write_binarized_volume(case_id: str, pred_5cls_dir: Path, out_path: Path) -> None:
-    """VLM 보정 없이 5cls pred를 그대로 이진화(0/1)만 해서 저장 - 2cls baseline(VLM 개입 전)용.
+    """
+    VLM 보정 없이 5cls pred를 그대로 이진화(0/1)만 해서 저장
+    - 2cls baseline(VLM 개입 전)용.
     LPS 재정렬 없이 원본 orientation 그대로 다뤄도 됨(전체를 균일하게 thresholding하는 것뿐이라
     bbox/slice_idx 좌표계와 무관)."""
     pred_path = Path(pred_5cls_dir) / f"{case_id}.nii.gz"
@@ -53,13 +55,16 @@ def write_binarized_volume(case_id: str, pred_5cls_dir: Path, out_path: Path) ->
 
 def write_corrected_volume(case_id: str, records_for_case: list[dict], pred_5cls_dir: Path,
                             out_path: Path, class_names: dict = None) -> None:
-    """VLM 판정을 실제 5cls 예측 볼륨에 반영해 nii.gz로 저장.
-    class_names가 None이면 2cls(vlm1_is_lesion만 반영, 나머지는 이진 1로 유지) -
-    subtype이 아직 없는 단계(vlm#1 is_lesion)에서 씀.
-    class_names를 주면 5cls(vlm1_is_lesion=False면 제거, True면 vlm2_lesion_type 클래스로
-    재라벨링) - subtype까지 돈 단계(vlm#2)에서 씀.
-    dataset 만들 때와 동일하게 클래스별 connected component로 인스턴스를 다시 뽑아 bbox로
-    픽셀을 특정하고, LPS 좌표계에서 보정한 뒤 원본 orientation으로 되돌려 저장한다."""
+    """
+    VLM 판정을 실제 5cls 예측 볼륨에 반영해 nii.gz로 저장.
+    class_names가 None이면 2cls(vlm1_is_lesion만 반영, 나머지는 이진 1로 유지) 
+    - subtype이 아직 없는 단계(vlm#1 is_lesion)에서 씀.
+    class_names를 주면 5cls(vlm1_is_lesion=False면 제거, True면 vlm2_lesion_type 클래스로 재라벨링) 
+    - subtype까지 돈 단계(vlm#2)에서 씀.
+    
+    dataset 만들 때와 동일하게 클래스별 connected component로 인스턴스를 다시 뽑아 
+    bbox로 픽셀을 특정하고, LPS 좌표계에서 보정한 뒤 원본 orientation으로 되돌려 저장
+    """
     pred_path = Path(pred_5cls_dir) / f"{case_id}.nii.gz"
     original_img = sitk.ReadImage(str(pred_path))
     original_orientation = sitk.DICOMOrientImageFilter_GetOrientationFromDirectionCosines(original_img.GetDirection())
