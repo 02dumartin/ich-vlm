@@ -73,15 +73,20 @@ def render_metrics_table(tables: dict) -> str:
     lines = ["| crop_mode | 단계 | Segmentation mDice | Segmentation mIoU | Segmentation mPrecision | "
              "Segmentation mRecall | Detection Acc | Detection Precision | Detection Recall |",
              "|---|---|---|---|---|---|---|---|---|"]
+    def _fmt(value):
+        # VLM이 인스턴스를 전부 지워버려 subtype 비교 자체가 0건인 경우 등, run_detection_eval이
+        # 값을 아예 못 만들어 None을 주는 경우가 있음(NaN과 달리 :.3f 포맷이 그대로 에러남).
+        return f"{value:.3f}" if value is not None else "-"
+
     for mode, t in tables.items():
         for stage_key, stage_label in [("is_lesion", "is lesion (2cls)"), ("lesion_type", "lesion type (5cls)")]:
             row = t["metrics"][stage_key]
             if row is None:
                 continue
             lines.append(
-                f"| {mode} | {stage_label} | {row['seg_dice']:.3f} | {row['seg_iou']:.3f} | "
-                f"{row['seg_precision']:.3f} | {row['seg_recall']:.3f} | {row['det_acc']:.3f} | "
-                f"{row['det_precision']:.3f} | {row['det_recall']:.3f} |"
+                f"| {mode} | {stage_label} | {_fmt(row['seg_dice'])} | {_fmt(row['seg_iou'])} | "
+                f"{_fmt(row['seg_precision'])} | {_fmt(row['seg_recall'])} | {_fmt(row['det_acc'])} | "
+                f"{_fmt(row['det_precision'])} | {_fmt(row['det_recall'])} |"
             )
     return "\n".join(lines)
 
