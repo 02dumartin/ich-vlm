@@ -2,7 +2,11 @@
 /data
 /vlm_datasets
 /nnUNet
-/experiments
+/exp
+
+# python cache
+__pycache__/
+*.pyc
 
 
 # sh
@@ -13,6 +17,6 @@
 *.pth
 
 # .md
-claude.md
+CLAUDE.md
 *.log
 

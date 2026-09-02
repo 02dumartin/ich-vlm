@@ -14,6 +14,10 @@ GEN_CONFIGS = {
         temperature=0.0, max_tokens=1024, seed=0,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     ),
+    # Gemma3 계열(medgemma) chat template엔 enable_thinking 스위치가 없어서 non_thinking의
+    # extra_body를 그대로 넘기면 템플릿 렌더링이 깨질 수 있음 - extra_body 없이 순수 생성
+    # 파라미터만 사용.
+    "medgemma_default": dict(temperature=0.0, max_tokens=1024, seed=0),
 }
 
 
