@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.vlm.analysis.results_table import build_tables, render_metrics_table, render_removal_rate_table
-from src.vlm.image_crop import CROP_MODES
+from src.vlm.preprocessing.image_crop import CROP_MODES
 
 
 def parse_arguments():

@@ -1,0 +1,25 @@
+# scripts/vlm_pipeline.py --config configs/vlm_pipeline/medgemma4b_crop_min_contour_example.yaml
+#
+# medgemma4b_crop_min_contour.yaml(zeroshot)과 동일 조건 + is_lesion 프롬프트만 example
+# (PLOS FP few-shot)로 바꾼 버전.
+
+dataset_json: vlm_datasets/mbh-seg25-5cls/thr0.001/5cls_dataset.json
+results_json: exp/260901_vlm-is-lesion-medgemma4B-example-mbhseg25/output/crop_min_contour/full_results.json
+tag: full
+
+stages: [is_lesion, subtype, evaluate]
+
+is_lesion:
+  base_url: http://localhost:8893/v1
+  model: medgemma-4b-it
+  gen_config: medgemma_default
+  crop_mode: crop_min_contour
+  prompt_variant: example
+  max_workers: 8
+
+subtype: {}  # 비어있으면 is_lesion 설정을 그대로 상속 (prompt_variant는 subtype에 미적용)
+
+evaluate:
+  pred_5cls_dir: exp/260821_nnunet-infer-5cls-thr-sweep-mbhseg25/output/thr0.001/pp
+  gt_5cls_dir: nnUNet/test_data/Test1_MBHSeg25/labelsTs
+  skip_seg_eval: false

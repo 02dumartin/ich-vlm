@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.vlm.classify.client import GEN_CONFIGS, get_client
 from src.vlm.analysis.evaluate import run_detection_eval, show_vlm_errors
-from src.vlm.classify.is_lesion_prompts import ICHIsLesionResult
+from src.vlm.classify.is_lesion_prompts import ICHIsLesionResult, build_messages_example
 from src.vlm.classify.is_lesion_prompts import build_messages as build_is_lesion_messages
 from src.vlm.classify.pipeline import classify_dataset_records
 from src.vlm.analysis.segmentation_eval import run_segmentation_eval
@@ -25,6 +25,9 @@ from src.vlm.classify.subtype_prompts import ICHSubtypeResult
 from src.vlm.classify.subtype_prompts import build_messages as build_subtype_messages
 
 ALL_STAGES = ("is_lesion", "subtype", "evaluate")
+# vlm_is_lesion.py의 PROMPT_VARIANTS와 동일 - is_lesion 단계만 zeroshot/example을 고를 수 있다
+# (subtype에는 fewshot_prompt가 아직 미구현이라 subtype 단계는 항상 zeroshot 프롬프트 하나뿐).
+IS_LESION_PROMPT_VARIANTS = {"zeroshot": build_is_lesion_messages, "example": build_messages_example}
 
 
 def parse_arguments():
@@ -49,9 +52,10 @@ def run_is_lesion_stage(cfg: dict, results_json: Path) -> None:
         records = json.load(f)
 
     client = get_client(stage_cfg.get("base_url", "http://localhost:8891/v1"))
+    prompt_variant = stage_cfg.get("prompt_variant", "zeroshot")
     results = classify_dataset_records(
         records,
-        build_messages_fn=build_is_lesion_messages,
+        build_messages_fn=IS_LESION_PROMPT_VARIANTS[prompt_variant],
         schema_cls=ICHIsLesionResult,
         client=client,
         model_name=stage_cfg.get("model", "Qwen/Qwen3.5-27B"),

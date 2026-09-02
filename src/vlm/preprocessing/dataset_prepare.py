@@ -40,7 +40,7 @@ import pandas as pd
 from skimage.measure import label, regionprops
 
 from src.utils import CLASS_NAMES, apply_window, load_lps_array
-from src.vlm.image_crop import CROP_MODES, crop_image, draw_single_bbox_overlay
+from src.vlm.preprocessing.image_crop import CROP_MODES, crop_image, draw_single_bbox_overlay
 
 
 def semantic_to_instance(mask: np.ndarray) -> tuple[np.ndarray, list[dict]]:

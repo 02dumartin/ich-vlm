@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.vlm.classify.client import GEN_CONFIGS, get_client
 from src.vlm.classify.is_lesion_prompts import ICHIsLesionResult, build_messages, build_messages_example
 from src.vlm.classify.pipeline import classify_dataset_records
-from src.vlm.image_crop import CROP_MODES
+from src.vlm.preprocessing.image_crop import CROP_MODES
 
 PROMPT_VARIANTS = {"zeroshot": build_messages, "example": build_messages_example}
 

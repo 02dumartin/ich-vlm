@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.vlm.dataset_prepare import build_dataset, save_dataset
+from src.vlm.preprocessing.dataset_prepare import build_dataset, save_dataset
 
 
 def parse_arguments():

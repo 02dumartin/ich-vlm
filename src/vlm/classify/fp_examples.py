@@ -35,7 +35,7 @@ from scipy.ndimage import shift as ndi_shift
 from skimage.measure import find_contours
 from skimage.registration import phase_cross_correlation
 
-from src.vlm.image_crop import _min_size_region
+from src.vlm.preprocessing.image_crop import _min_size_region
 
 FP_DIR = Path("/home/jovyan/aicon-gamma-datavol-1/hjgoh/ich-vlm/vlm_datasets/fp_examples")
 OUT_DIR = FP_DIR / "processed"

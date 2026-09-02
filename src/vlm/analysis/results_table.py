@@ -21,7 +21,7 @@ markdown으로 만든다:
 import json
 from pathlib import Path
 
-from src.vlm.image_crop import CROP_MODES
+from src.vlm.preprocessing.image_crop import CROP_MODES
 
 
 def _metrics_row(summary: dict) -> dict:

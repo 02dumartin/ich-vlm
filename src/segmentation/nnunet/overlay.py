@@ -32,6 +32,10 @@ class_colors = {
     5: (4, 136, 133),    # SDH
 }
 
+# binary(2cls, is_lesion) 오버레이 색. 5cls 팔레트 어느 색과도 hue가 겹치지 않는 옅은 노랑.
+lesion_color = (255, 236, 133)
+
+
 # build color map
 def build_cmap(color_dict: dict, n_classes: int) -> ListedColormap:
     colors_rgb = np.zeros((n_classes, 3))
@@ -41,6 +45,7 @@ def build_cmap(color_dict: dict, n_classes: int) -> ListedColormap:
 
 
 cmap_5cls = build_cmap(class_colors, 6)  # 0(background, black)~5
+cmap_2cls = build_cmap({1: lesion_color}, 2)  # 0(background, black)~1(lesion, yellow)
 
 
 # apply window
@@ -59,10 +64,13 @@ def load_lps_array(path: Path) -> np.ndarray:
 
 
 # draw mask panel
-def _draw_mask_panel(ax, windowed_slice: np.ndarray, mask_slice: np.ndarray, title: str):
+def _draw_mask_panel(
+    ax, windowed_slice: np.ndarray, mask_slice: np.ndarray, title: str,
+    cmap: ListedColormap = cmap_5cls, vmax: int = 5,
+):
     mask_overlay = np.ma.masked_where(mask_slice == 0, mask_slice)
     ax.imshow(windowed_slice, cmap="gray", vmin=0, vmax=1)
-    ax.imshow(mask_overlay, cmap=cmap_5cls, vmin=0, vmax=5, alpha=0.6)
+    ax.imshow(mask_overlay, cmap=cmap, vmin=0, vmax=vmax, alpha=0.6)
     ax.set_title(title, fontsize=10)
     ax.axis("off")
 
